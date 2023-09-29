@@ -2,20 +2,43 @@
 #include <freeglut.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <math.h>
+#include <stdbool.h>
+#include <float.h>
+#define PI 3.1415926
+#define DEG_TO_RAD PI/180.0
+#define BOID_COUNT 3
 
 
 void printKeyboardControls(void);
 void drawButton(void);
+void drawBoids(void);
+void initializeBoids(void);
+bool inClosestSix(int);
+void findClosestSix(int);
+float findDistance(int, int);
+int compareDistanceIndexPair(const void* a, const void* b);
 
+typedef struct {
+	GLfloat x;
+	GLfloat y;
+	GLfloat direction;
+	GLfloat speed;
+} Boid;
 
+typedef struct {
+	float distance;
+	int index;
+} DistanceIndexPair;
 
 // global mouse variables
 GLint   mousePressed = 0;
 GLfloat mouseX, mouseY;
 
 // Window size parameters
-GLint windowHieght = 500;
+GLint windowHeight = 500;
 GLint windowWidth = 500;
+GLfloat buttonAreaHeight = 0.25;
 
 // button variables
 GLboolean paused = GL_FALSE;
@@ -25,6 +48,10 @@ GLint highlightedBoid = 0;
 GLfloat boidSpeed = 0.001;
 
 // boid variables
+Boid currentFlock[BOID_COUNT];
+int closestSix[] = { -1, -1, -1, -1, -1, -1 };
+float boidSideLength = 0.05;
+float boidAngle = PI / 20;
 
 
 
@@ -61,11 +88,15 @@ void myDisplay()
 	// clear the screen 
 	glClear(GL_COLOR_BUFFER_BIT);
 
+	//draw boids
+	drawBoids();
+
 	//draw button area
 	drawButton();
 
 
-	glFlush();
+
+	glutSwapBuffers();
 }
 
 
@@ -84,8 +115,8 @@ void drawButton(void) {
 
 		glColor3f(178.0 / 255, 178.0 / 255, 128.0 / 255);
 		glVertex2f(0, 0);
-		glVertex2f(0, 0.25);
-		glVertex2f(1, 0.25);
+		glVertex2f(0, buttonAreaHeight);
+		glVertex2f(1, buttonAreaHeight);
 		glVertex2f(1, 0);
 
 	glEnd();
@@ -166,8 +197,8 @@ void myMouseButton(int button, int state, int x, int y)
 		mouseX = (GLfloat)x / (GLfloat)windowWidth;
 
 		// convert y from Mouse coordinates to OpenGL coordinates
-		mouseY = (GLfloat)windowHieght - (GLfloat)y;  // first invert mouse Y position
-		mouseY = mouseY / (GLfloat)windowHieght;
+		mouseY = (GLfloat)windowHeight - (GLfloat)y;  // first invert mouse Y position
+		mouseY = mouseY / (GLfloat)windowHeight;
 
 		//checks to see if mouse is clicking inside the pause button
 		if (mouseX <= 0.67 && mouseX >= 0.33 && mouseY >= 0.05 && mouseY <= 0.15) {
@@ -198,13 +229,17 @@ void myKeyboard(unsigned char key, int x, int y) {
 
 	//If the user hits a number key, the ASCII value of the char is converted to the int number
 	else if (key >= '0' && key <= '9') {
+		for (int i = 0; i < 6; i++) {
+			closestSix[i] = -1;
+		}
 		if (key == '0') {
 			highlightedBoid = 0;
 		}
 		else {
 			highlightedBoid = key - '0';
+			findClosestSix(highlightedBoid);
 		}
-		printf("\nhighlighted: %d", highlightedBoid);
+		printf("\nhighlighted: %d closest six: ", highlightedBoid);
 	}
 
 	glutPostRedisplay();
@@ -219,7 +254,7 @@ void myKeyboard(unsigned char key, int x, int y) {
 					presses by the user
 
 *************************************************************************/
-void specialKeyboard(int key, int x, int y) {
+void mySpecialKeyboard(int key, int x, int y) {
 
 	//Increasing or decreasing speed based on page up or page down press respectively
 	switch (key) {
@@ -241,6 +276,112 @@ void specialKeyboard(int key, int x, int y) {
 	glutPostRedisplay();
 }
 
+
+void initializeBoids(void) {
+	for (int i = 0; i < BOID_COUNT; i++) {
+		currentFlock[i].x = (GLfloat)rand() / RAND_MAX;
+		currentFlock[i].y = (GLfloat)rand() / RAND_MAX;
+		currentFlock[i].direction = ((GLfloat)rand() / RAND_MAX) * 2 * PI;
+		currentFlock[i].speed = boidSpeed;
+	}
+}
+
+void drawBoids(void) {
+	// Draw the boid as a triangle based on its position and direction
+	for (int i = 0; i < BOID_COUNT; i++) {
+		glBegin(GL_TRIANGLES);
+		if (i == highlightedBoid - 1) {
+			glColor3f(1.0, 0.0, 0.0);
+		}
+		else if (inClosestSix(i)) {
+			glColor3f(0.0, 1.0, 0.0);
+		}
+		else {
+			glColor3f(0.0, 0.0, 1.0);
+		}
+
+		glVertex2f(currentFlock[i].x, currentFlock[i].y);
+		glVertex2f(currentFlock[i].x - (boidSideLength*sin(PI/2-currentFlock[i].direction - boidAngle)), currentFlock[i].y - (boidSideLength * cos(PI / 2 - currentFlock[i].direction - boidAngle)));
+		glVertex2f(currentFlock[i].x - (boidSideLength * cos(PI / 2 - currentFlock[i].direction - boidAngle)), currentFlock[i].y - (boidSideLength * sin(PI / 2 - currentFlock[i].direction - boidAngle)));
+		glEnd();
+	}
+}
+
+
+void myIdle(void) {
+	if (!paused) {
+		for (int i = 0; i < BOID_COUNT; i++) {
+			currentFlock[i].speed = boidSpeed;
+			currentFlock[i].x += currentFlock[i].speed * cos(currentFlock[i].direction);
+			currentFlock[i].y += currentFlock[i].speed * sin(currentFlock[i].direction);
+			if (currentFlock[i].x < 0.0) currentFlock[i].x = 1.0;
+			else if (currentFlock[i].x > 1.0) currentFlock[i].x = 0.0;
+			if (currentFlock[i].y < buttonAreaHeight) currentFlock[i].y = 1.0;
+			else if (currentFlock[i].y > 1.0) currentFlock[i].y = buttonAreaHeight;
+
+		}
+	}
+
+	glutPostRedisplay();
+}
+
+bool inClosestSix(int index) {
+	for (int i = 0; i < 6; i++) {
+		if (index == closestSix[i]) return true;
+	}
+	return false;
+}
+
+//https://stackoverflow.com/questions/1787996/c-library-function-to-perform-sort
+
+
+int compareDistanceIndexPair(const void* a, const void* b) {
+	const DistanceIndexPair* pairA = (const DistanceIndexPair*)a;
+	const DistanceIndexPair* pairB = (const DistanceIndexPair*)b;
+
+	if (pairA->distance > pairB->distance) return 1;
+	if (pairA->distance < pairB->distance) return -1;
+	return 0;
+}
+
+void findClosestSix(int index) {
+	DistanceIndexPair distanceIndexPairs[BOID_COUNT];
+
+	// Calculate distances and store them along with their indices
+	for (int i = 0; i < BOID_COUNT; i++) {
+		if (i != index) {
+			distanceIndexPairs[i].distance = findDistance(index, i);
+			distanceIndexPairs[i].index = i;
+		}
+		else {
+			distanceIndexPairs[i].distance = INFINITY;
+			distanceIndexPairs[i].index = -1;  // Mark as invalid index
+		}
+	}
+
+	// Sort the array of distance-index pairs based on distances
+	qsort(distanceIndexPairs, BOID_COUNT, sizeof(DistanceIndexPair), compareDistanceIndexPair);
+
+	// Extract the indices of the closest distances
+	for (int i = 0; i < 6; i++) {
+		closestSix[i] = distanceIndexPairs[i].index;
+		printf("%d ", closestSix[i]);  // Print for verification
+	}
+	printf("\n");
+}
+
+float findDistance(int index1, int index2) {
+	float x1 = currentFlock[index1].x;
+	float y1 = currentFlock[index1].y;
+
+	float x2 = currentFlock[index2].x;
+	float y2 = currentFlock[index2].y;
+
+	float dist = sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2));
+
+	return dist;
+}
+
 /************************************************************************
 
 	Function:		main
@@ -251,14 +392,18 @@ void specialKeyboard(int key, int x, int y) {
 *************************************************************************/
 void main(int argc, char** argv)
 {
+
+	//seeding the random number generator
+	srand(time(NULL));
+
 	// initialize the toolkit
 	glutInit(&argc, argv);
 
 	// set display mode
-	glutInitDisplayMode(GLUT_RGB);
+	glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE);
 
 	// set window size
-	glutInitWindowSize(windowWidth, windowHieght);
+	glutInitWindowSize(windowWidth, windowHeight);
 
 	// set window position on screen
 	glutInitWindowPosition(100, 150);
@@ -276,11 +421,16 @@ void main(int argc, char** argv)
 	glutKeyboardFunc(myKeyboard);
 
 	// register special keys function
-	glutSpecialFunc(specialKeyboard);
-
+	glutSpecialFunc(mySpecialKeyboard);
 
 	//initialize the rendering context
 	initializeGL();
+
+	//initialize the boids
+	initializeBoids();
+
+	// regiser idle function for animation
+	glutIdleFunc(myIdle);
 
 	//display keyboard controls on console
 	printKeyboardControls();

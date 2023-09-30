@@ -8,14 +8,15 @@
 #define PI 3.1415926
 #define DEG_TO_RAD PI/180.0
 #define BOID_COUNT 40
+#define CLOSEST_COUNT 6
 
 
 void printKeyboardControls(void);
 void drawButton(void);
 void drawBoids(void);
 void initializeBoids(void);
-bool inClosestSix(int);
-void findClosestSix(int, int[]);
+bool inClosestN(int);
+void findClosestN(int, int[]);
 float findDistance(int, int);
 int compareDistanceIndexPair(const void* a, const void* b);
 void drawDebug(void);
@@ -46,15 +47,16 @@ GLboolean paused = GL_FALSE;
 
 // control variables
 GLint highlightedBoid = 0;
-GLfloat boidSpeed = 0.0020;
+GLfloat boidSpeed = 0.0030;
 
 // boid variables
 Boid currentFlock[BOID_COUNT];
 Boid previousFlock[BOID_COUNT];
-int closestSix[] = { -1, -1, -1, -1, -1, -1 };
+int closestN[] = { -1, -1, -1, -1, -1, -1 };
 float boidSideLength = 0.03;
 float boidAngle = PI / 20;
 float turnFactor = 0.01;
+float initialTurnFactor = 0.007;
 
 
 
@@ -254,14 +256,14 @@ void myKeyboard(unsigned char key, int x, int y) {
 	//If the user hits a number key, the ASCII value of the char is converted to the int number
 	else if (key >= '0' && key <= '9') {
 		for (int i = 0; i < 6; i++) {
-			closestSix[i] = -1;
+			closestN[i] = -1;
 		}
 		if (key == '0') {
 			highlightedBoid = 0;
 		}
 		else {
 			highlightedBoid = key - '0';
-			findClosestSix(highlightedBoid-1, closestSix);
+			findClosestN(highlightedBoid-1, closestN);
 		}
 	}
 
@@ -283,8 +285,8 @@ void mySpecialKeyboard(int key, int x, int y) {
 	switch (key) {
 	case GLUT_KEY_PAGE_UP:
 		boidSpeed += 0.001;
-		if (boidSpeed >= 0.050) {
-			boidSpeed = 0.050;
+		if (boidSpeed >= 0.040) {
+			boidSpeed = 0.040;
 		}
 		break;
 	case GLUT_KEY_PAGE_DOWN:
@@ -294,6 +296,7 @@ void mySpecialKeyboard(int key, int x, int y) {
 		}
 		break;
 	}
+
 	glutPostRedisplay();
 }
 
@@ -340,7 +343,7 @@ void drawBoids(void) {
 		if (i == highlightedBoid - 1) {
 			glColor3f(1.0, 0.0, 0.0);
 		}
-		else if (inClosestSix(i)) {
+		else if (inClosestN(i)) {
 			glColor3f(0.0, 1.0, 0.0);
 		}
 		else {
@@ -365,6 +368,7 @@ void drawBoids(void) {
 *************************************************************************/
 void myIdle(void) {
 	if (!paused) {
+		turnFactor = initialTurnFactor + boidSpeed;
 		for (int i = 0; i < BOID_COUNT; i++) {
 			if (currentFlock[i].x < 0.05) {
 				float inverseDist = 1 / currentFlock[i].x;
@@ -376,7 +380,7 @@ void myIdle(void) {
 					currentFlock[i].direction -= inverseDist * turnFactor;
 				}
 			}
-			else if (currentFlock[i].x > 0.95) {
+			if (currentFlock[i].x > 0.95) {
 				float inverseDist = 1 / (1 - currentFlock[i].x);
 
 				if (currentFlock[i].direction >= 0 && currentFlock[i].direction <= PI / 2) {
@@ -398,7 +402,7 @@ void myIdle(void) {
 					currentFlock[i].direction -= inverseDist * turnFactor;
 				}
 			}
-			else if (currentFlock[i].y > 0.95) {
+			if (currentFlock[i].y > 0.95) {
 				float inverseDist = 1 / (1 - currentFlock[i].y);
 
 				if (currentFlock[i].direction >= PI / 2 && currentFlock[i].direction <= PI) {
@@ -409,21 +413,22 @@ void myIdle(void) {
 				}
 
 			}
+
+			currentFlock[i].direction = fmod(currentFlock[i].direction, 2 * PI);
 			if (currentFlock[i].direction < 0) {
 				currentFlock[i].direction += 2 * PI;
 			}
-			else if (currentFlock[i].direction > 2 * PI) {
-				currentFlock[i].direction -= 2 * PI;
-			}
 
+			printf("\ndirection: %.3f, x: %.2f, y: %.2f", currentFlock[i].direction, currentFlock[i].x, currentFlock[i].y);
 			currentFlock[i].speed = boidSpeed;
 			currentFlock[i].x += currentFlock[i].speed * cos(currentFlock[i].direction);
 			currentFlock[i].y += currentFlock[i].speed * sin(currentFlock[i].direction);
-			//if (currentFlock[i].x < 0.0) currentFlock[i].x = 1.0;
-			//else if (currentFlock[i].x > 1.0) currentFlock[i].x = 0.0;
-			//if (currentFlock[i].y < buttonAreaHeight) currentFlock[i].y = 1.0;
-			//else if (currentFlock[i].y > 1.0) currentFlock[i].y = buttonAreaHeight;
 
+
+		}
+
+		for (int i = 0; i < BOID_COUNT; i++) {
+			previousFlock[i] = currentFlock[i];
 		}
 	}
 
@@ -433,15 +438,15 @@ void myIdle(void) {
 
 /************************************************************************
 
-	Function:		inClosestSix
+	Function:		inClosestN
 
 	Description:	given an index, checks to see if the parameter boid 
-					should be highlighted as one of the closest six
+					should be highlighted as one of the closest N (6)
 
 *************************************************************************/
-bool inClosestSix(int index) {
+bool inClosestN(int index) {
 	for (int i = 0; i < 6; i++) {
-		if (index == closestSix[i]) return true;
+		if (index == closestN[i]) return true;
 	}
 	return false;
 }
@@ -476,7 +481,7 @@ int compareDistanceIndexPair(const void* a, const void* b) {
 					for easy indexing
 
 *************************************************************************/
-void findClosestSix(int index, int closestSixArray[]) {
+void findClosestN(int index, int closestNArray[]) {
 	DistanceIndexPair distanceIndexPairs[BOID_COUNT];
 
 	for (int i = 0; i < BOID_COUNT; i++) {
@@ -492,8 +497,8 @@ void findClosestSix(int index, int closestSixArray[]) {
 
 	qsort(distanceIndexPairs, BOID_COUNT, sizeof(DistanceIndexPair), compareDistanceIndexPair);
 
-	for (int i = 0; i < 6; i++) {
-		closestSixArray[i] = distanceIndexPairs[i].index;
+	for (int i = 0; i < CLOSEST_COUNT; i++) {
+		closestNArray[i] = distanceIndexPairs[i].index;
 	}
 }
 

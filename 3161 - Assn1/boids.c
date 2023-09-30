@@ -18,6 +18,7 @@ bool inClosestSix(int);
 void findClosestSix(int, int[]);
 float findDistance(int, int);
 int compareDistanceIndexPair(const void* a, const void* b);
+void drawDebug(void);
 
 typedef struct {
 	GLfloat x;
@@ -45,7 +46,7 @@ GLboolean paused = GL_FALSE;
 
 // control variables
 GLint highlightedBoid = 0;
-GLfloat boidSpeed = 0.001;
+GLfloat boidSpeed = 0.0020;
 
 // boid variables
 Boid currentFlock[BOID_COUNT];
@@ -53,6 +54,7 @@ Boid previousFlock[BOID_COUNT];
 int closestSix[] = { -1, -1, -1, -1, -1, -1 };
 float boidSideLength = 0.03;
 float boidAngle = PI / 20;
+float turnFactor = 0.01;
 
 
 
@@ -89,8 +91,14 @@ void myDisplay()
 	// clear the screen 
 	glClear(GL_COLOR_BUFFER_BIT);
 
+	//draw debug lines
+	//drawDebug();
+
+
 	//draw boids
 	drawBoids();
+
+
 
 	//draw button area
 	drawButton();
@@ -100,6 +108,21 @@ void myDisplay()
 	glutSwapBuffers();
 }
 
+void drawDebug(void) {
+	glBegin(GL_LINES);
+		glColor3f(1.0, 1.0, 1.0);
+		glVertex2f(0.05, 0);
+		glVertex2f(0.05, 1);
+
+		glVertex2f(0, 0.95);
+		glVertex2f(1, 0.95);
+
+		glVertex2f(0, 0.30);
+		glVertex2f(1, 0.30);
+
+		glVertex2f(0.95, 0);
+		glVertex2f(0.95, 1);
+}
 
 /************************************************************************
 
@@ -260,8 +283,8 @@ void mySpecialKeyboard(int key, int x, int y) {
 	switch (key) {
 	case GLUT_KEY_PAGE_UP:
 		boidSpeed += 0.001;
-		if (boidSpeed >= 0.010) {
-			boidSpeed = 0.010;
+		if (boidSpeed >= 0.050) {
+			boidSpeed = 0.050;
 		}
 		break;
 	case GLUT_KEY_PAGE_DOWN:
@@ -287,6 +310,9 @@ void initializeBoids(void) {
 	for (int i = 0; i < BOID_COUNT; i++) {
 		currentFlock[i].x = (GLfloat)rand() / RAND_MAX;
 		currentFlock[i].y = (GLfloat)rand() / RAND_MAX;
+		if (currentFlock[i].y < buttonAreaHeight) {
+			currentFlock[i].y += buttonAreaHeight;
+		}
 		currentFlock[i].direction = ((GLfloat)rand() / RAND_MAX) * 2 * PI;
 		currentFlock[i].speed = boidSpeed;
 
@@ -340,13 +366,63 @@ void drawBoids(void) {
 void myIdle(void) {
 	if (!paused) {
 		for (int i = 0; i < BOID_COUNT; i++) {
+			if (currentFlock[i].x < 0.05) {
+				float inverseDist = 1 / currentFlock[i].x;
+
+				if (currentFlock[i].direction >= PI && currentFlock[i].direction <= 3 * PI / 2) {
+					currentFlock[i].direction += inverseDist * turnFactor;
+				}
+				else if (currentFlock[i].direction >= PI / 2 && currentFlock[i].direction <= PI) {
+					currentFlock[i].direction -= inverseDist * turnFactor;
+				}
+			}
+			else if (currentFlock[i].x > 0.95) {
+				float inverseDist = 1 / (1 - currentFlock[i].x);
+
+				if (currentFlock[i].direction >= 0 && currentFlock[i].direction <= PI / 2) {
+					currentFlock[i].direction += inverseDist * turnFactor;
+				}
+				else if (currentFlock[i].direction >= 3 * PI / 2 && currentFlock[i].direction <= 2 * PI) {
+					currentFlock[i].direction -= inverseDist * turnFactor;
+				}
+
+			}
+
+			if (currentFlock[i].y < buttonAreaHeight + 0.05) {
+				float inverseDist = 1 / (currentFlock[i].y - buttonAreaHeight);
+
+				if (currentFlock[i].direction >= 3 * PI / 2 && currentFlock[i].direction <= 2 * PI) {
+					currentFlock[i].direction += inverseDist * turnFactor;
+				}
+				else if (currentFlock[i].direction >= PI && currentFlock[i].direction <= 3 * PI / 2) {
+					currentFlock[i].direction -= inverseDist * turnFactor;
+				}
+			}
+			else if (currentFlock[i].y > 0.95) {
+				float inverseDist = 1 / (1 - currentFlock[i].y);
+
+				if (currentFlock[i].direction >= PI / 2 && currentFlock[i].direction <= PI) {
+					currentFlock[i].direction += inverseDist * turnFactor;
+				}
+				else if (currentFlock[i].direction >= 0 && currentFlock[i].direction <=  PI / 2) {
+					currentFlock[i].direction -= inverseDist * turnFactor;
+				}
+
+			}
+			if (currentFlock[i].direction < 0) {
+				currentFlock[i].direction += 2 * PI;
+			}
+			else if (currentFlock[i].direction > 2 * PI) {
+				currentFlock[i].direction -= 2 * PI;
+			}
+
 			currentFlock[i].speed = boidSpeed;
 			currentFlock[i].x += currentFlock[i].speed * cos(currentFlock[i].direction);
 			currentFlock[i].y += currentFlock[i].speed * sin(currentFlock[i].direction);
-			if (currentFlock[i].x < 0.0) currentFlock[i].x = 1.0;
-			else if (currentFlock[i].x > 1.0) currentFlock[i].x = 0.0;
-			if (currentFlock[i].y < buttonAreaHeight) currentFlock[i].y = 1.0;
-			else if (currentFlock[i].y > 1.0) currentFlock[i].y = buttonAreaHeight;
+			//if (currentFlock[i].x < 0.0) currentFlock[i].x = 1.0;
+			//else if (currentFlock[i].x > 1.0) currentFlock[i].x = 0.0;
+			//if (currentFlock[i].y < buttonAreaHeight) currentFlock[i].y = 1.0;
+			//else if (currentFlock[i].y > 1.0) currentFlock[i].y = buttonAreaHeight;
 
 		}
 	}

@@ -7,7 +7,7 @@
 #include <float.h>
 #define PI 3.1415926
 #define DEG_TO_RAD PI/180.0
-#define BOID_COUNT 3
+#define BOID_COUNT 40
 
 
 void printKeyboardControls(void);
@@ -15,7 +15,7 @@ void drawButton(void);
 void drawBoids(void);
 void initializeBoids(void);
 bool inClosestSix(int);
-void findClosestSix(int);
+void findClosestSix(int, int[]);
 float findDistance(int, int);
 int compareDistanceIndexPair(const void* a, const void* b);
 
@@ -49,8 +49,9 @@ GLfloat boidSpeed = 0.001;
 
 // boid variables
 Boid currentFlock[BOID_COUNT];
+Boid previousFlock[BOID_COUNT];
 int closestSix[] = { -1, -1, -1, -1, -1, -1 };
-float boidSideLength = 0.05;
+float boidSideLength = 0.03;
 float boidAngle = PI / 20;
 
 
@@ -237,9 +238,8 @@ void myKeyboard(unsigned char key, int x, int y) {
 		}
 		else {
 			highlightedBoid = key - '0';
-			findClosestSix(highlightedBoid);
+			findClosestSix(highlightedBoid-1, closestSix);
 		}
-		printf("\nhighlighted: %d closest six: ", highlightedBoid);
 	}
 
 	glutPostRedisplay();
@@ -263,29 +263,50 @@ void mySpecialKeyboard(int key, int x, int y) {
 		if (boidSpeed >= 0.010) {
 			boidSpeed = 0.010;
 		}
-		printf("\nfaster, %.3f", boidSpeed);
 		break;
 	case GLUT_KEY_PAGE_DOWN:
 		boidSpeed -= 0.001;
 		if (boidSpeed <= 0.001) {
 			boidSpeed = 0.001;
 		}
-		printf("\nslower, %.3f", boidSpeed);
 		break;
 	}
 	glutPostRedisplay();
 }
 
 
+/************************************************************************
+
+	Function:		initializeBoids
+
+	Description:	initializes positions, speeds, and directions of all
+					the boids
+
+*************************************************************************/
 void initializeBoids(void) {
 	for (int i = 0; i < BOID_COUNT; i++) {
 		currentFlock[i].x = (GLfloat)rand() / RAND_MAX;
 		currentFlock[i].y = (GLfloat)rand() / RAND_MAX;
 		currentFlock[i].direction = ((GLfloat)rand() / RAND_MAX) * 2 * PI;
 		currentFlock[i].speed = boidSpeed;
+
+		previousFlock[i].x = currentFlock[i].x;
+		previousFlock[i].y = currentFlock[i].y;
+		previousFlock[i].direction = currentFlock[i].direction;
+		previousFlock[i].speed = currentFlock[i].speed;
+
 	}
 }
 
+
+/************************************************************************
+
+	Function:		drawBoids
+
+	Description:	draws all the boids in the boids array with their 
+					corresponding directions and points
+
+*************************************************************************/
 void drawBoids(void) {
 	// Draw the boid as a triangle based on its position and direction
 	for (int i = 0; i < BOID_COUNT; i++) {
@@ -301,13 +322,21 @@ void drawBoids(void) {
 		}
 
 		glVertex2f(currentFlock[i].x, currentFlock[i].y);
-		glVertex2f(currentFlock[i].x - (boidSideLength*sin(PI/2-currentFlock[i].direction - boidAngle)), currentFlock[i].y - (boidSideLength * cos(PI / 2 - currentFlock[i].direction - boidAngle)));
-		glVertex2f(currentFlock[i].x - (boidSideLength * cos(PI / 2 - currentFlock[i].direction - boidAngle)), currentFlock[i].y - (boidSideLength * sin(PI / 2 - currentFlock[i].direction - boidAngle)));
+		glVertex2f(currentFlock[i].x + (boidSideLength * cos(PI + currentFlock[i].direction + boidAngle)), currentFlock[i].y + (boidSideLength * sin(PI + currentFlock[i].direction + boidAngle)));
+		glVertex2f(currentFlock[i].x + (boidSideLength * cos(PI + currentFlock[i].direction - boidAngle)), currentFlock[i].y + (boidSideLength * sin(PI + currentFlock[i].direction - boidAngle)));
 		glEnd();
 	}
 }
 
 
+/************************************************************************
+
+	Function:		myIdle
+
+	Description:	idle function used for nonevents for GLUT, handles
+					movement of boids to be animated
+
+*************************************************************************/
 void myIdle(void) {
 	if (!paused) {
 		for (int i = 0; i < BOID_COUNT; i++) {
@@ -325,6 +354,15 @@ void myIdle(void) {
 	glutPostRedisplay();
 }
 
+
+/************************************************************************
+
+	Function:		inClosestSix
+
+	Description:	given an index, checks to see if the parameter boid 
+					should be highlighted as one of the closest six
+
+*************************************************************************/
 bool inClosestSix(int index) {
 	for (int i = 0; i < 6; i++) {
 		if (index == closestSix[i]) return true;
@@ -332,9 +370,18 @@ bool inClosestSix(int index) {
 	return false;
 }
 
-//https://stackoverflow.com/questions/1787996/c-library-function-to-perform-sort
 
+/************************************************************************
 
+	Function:		compareDistanceIndexPair
+
+	Description:	compare function used for qsort, compares distances
+					in distance index pairs
+
+	reference: 
+	https://stackoverflow.com/questions/1787996/c-library-function-to-perform-sort
+
+*************************************************************************/
 int compareDistanceIndexPair(const void* a, const void* b) {
 	const DistanceIndexPair* pairA = (const DistanceIndexPair*)a;
 	const DistanceIndexPair* pairB = (const DistanceIndexPair*)b;
@@ -344,10 +391,18 @@ int compareDistanceIndexPair(const void* a, const void* b) {
 	return 0;
 }
 
-void findClosestSix(int index) {
+/************************************************************************
+
+	Function:		findClosestSix
+
+	Description:	finds the closest six boids relative to the boid who's
+					index is passed as a parameter, places the six in an array
+					for easy indexing
+
+*************************************************************************/
+void findClosestSix(int index, int closestSixArray[]) {
 	DistanceIndexPair distanceIndexPairs[BOID_COUNT];
 
-	// Calculate distances and store them along with their indices
 	for (int i = 0; i < BOID_COUNT; i++) {
 		if (i != index) {
 			distanceIndexPairs[i].distance = findDistance(index, i);
@@ -359,17 +414,22 @@ void findClosestSix(int index) {
 		}
 	}
 
-	// Sort the array of distance-index pairs based on distances
 	qsort(distanceIndexPairs, BOID_COUNT, sizeof(DistanceIndexPair), compareDistanceIndexPair);
 
-	// Extract the indices of the closest distances
 	for (int i = 0; i < 6; i++) {
-		closestSix[i] = distanceIndexPairs[i].index;
-		printf("%d ", closestSix[i]);  // Print for verification
+		closestSixArray[i] = distanceIndexPairs[i].index;
 	}
-	printf("\n");
 }
 
+
+/************************************************************************
+
+	Function:		findDistance
+
+	Description:	Finds the distance between two boids based off their 
+					corresponding index from the boids array
+
+*************************************************************************/
 float findDistance(int index1, int index2) {
 	float x1 = currentFlock[index1].x;
 	float y1 = currentFlock[index1].y;

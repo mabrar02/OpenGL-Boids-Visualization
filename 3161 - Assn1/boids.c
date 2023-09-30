@@ -20,6 +20,8 @@ void findClosestN(int, int[]);
 float findDistance(int, int);
 int compareDistanceIndexPair(const void* a, const void* b);
 void drawDebug(void);
+void handleBoidWallInteraction(int);
+void handleFlockingInteraction(int);
 
 typedef struct {
 	GLfloat x;
@@ -57,6 +59,9 @@ float boidSideLength = 0.03;
 float boidAngle = PI / 20;
 float turnFactor = 0.01;
 float initialTurnFactor = 0.007;
+float flockingFactor = 0.5;
+float minBoidDistApart = 0.1;
+float boidAvoidanceFactor = 0.1;
 
 
 
@@ -263,7 +268,7 @@ void myKeyboard(unsigned char key, int x, int y) {
 		}
 		else {
 			highlightedBoid = key - '0';
-			findClosestN(highlightedBoid-1, closestN);
+
 		}
 	}
 
@@ -367,51 +372,20 @@ void drawBoids(void) {
 
 *************************************************************************/
 void myIdle(void) {
+	if (highlightedBoid != 0) {
+		findClosestN(highlightedBoid - 1, closestN);
+	}
+
+
 	if (!paused) {
 		turnFactor = initialTurnFactor + boidSpeed;
 		for (int i = 0; i < BOID_COUNT; i++) {
-			if (currentFlock[i].x < 0.05) {
-				float inverseDist = 1 / currentFlock[i].x;
 
-				if (currentFlock[i].direction >= PI && currentFlock[i].direction <= 3 * PI / 2) {
-					currentFlock[i].direction += inverseDist * turnFactor;
-				}
-				else if (currentFlock[i].direction >= PI / 2 && currentFlock[i].direction <= PI) {
-					currentFlock[i].direction -= inverseDist * turnFactor;
-				}
+			if (currentFlock[i].x < 0.05 || currentFlock[i].x > 0.95 || currentFlock[i].y < buttonAreaHeight + 0.05 || currentFlock[i].y > 0.95) {
+				handleBoidWallInteraction(i);
 			}
-			if (currentFlock[i].x > 0.95) {
-				float inverseDist = 1 / (1 - currentFlock[i].x);
-
-				if (currentFlock[i].direction >= 0 && currentFlock[i].direction <= PI / 2) {
-					currentFlock[i].direction += inverseDist * turnFactor;
-				}
-				else if (currentFlock[i].direction >= 3 * PI / 2 && currentFlock[i].direction <= 2 * PI) {
-					currentFlock[i].direction -= inverseDist * turnFactor;
-				}
-
-			}
-
-			if (currentFlock[i].y < buttonAreaHeight + 0.05) {
-				float inverseDist = 1 / (currentFlock[i].y - buttonAreaHeight);
-
-				if (currentFlock[i].direction >= 3 * PI / 2 && currentFlock[i].direction <= 2 * PI) {
-					currentFlock[i].direction += inverseDist * turnFactor;
-				}
-				else if (currentFlock[i].direction >= PI && currentFlock[i].direction <= 3 * PI / 2) {
-					currentFlock[i].direction -= inverseDist * turnFactor;
-				}
-			}
-			if (currentFlock[i].y > 0.95) {
-				float inverseDist = 1 / (1 - currentFlock[i].y);
-
-				if (currentFlock[i].direction >= PI / 2 && currentFlock[i].direction <= PI) {
-					currentFlock[i].direction += inverseDist * turnFactor;
-				}
-				else if (currentFlock[i].direction >= 0 && currentFlock[i].direction <=  PI / 2) {
-					currentFlock[i].direction -= inverseDist * turnFactor;
-				}
-
+			else {
+				handleFlockingInteraction(i);
 			}
 
 			currentFlock[i].direction = fmod(currentFlock[i].direction, 2 * PI);
@@ -419,7 +393,7 @@ void myIdle(void) {
 				currentFlock[i].direction += 2 * PI;
 			}
 
-			printf("\ndirection: %.3f, x: %.2f, y: %.2f", currentFlock[i].direction, currentFlock[i].x, currentFlock[i].y);
+			//printf("\ndirection: %.3f, x: %.2f, y: %.2f", currentFlock[i].direction, currentFlock[i].x, currentFlock[i].y);
 			currentFlock[i].speed = boidSpeed;
 			currentFlock[i].x += currentFlock[i].speed * cos(currentFlock[i].direction);
 			currentFlock[i].y += currentFlock[i].speed * sin(currentFlock[i].direction);
@@ -435,6 +409,88 @@ void myIdle(void) {
 	glutPostRedisplay();
 }
 
+void handleFlockingInteraction(int i) {
+	int N[CLOSEST_COUNT];
+
+	findClosestN(i, N);
+
+	float avgDirection = 0;
+	for (int j = 0; j < CLOSEST_COUNT; j++) {
+		avgDirection += previousFlock[N[j]].direction;
+	}
+	avgDirection = avgDirection / CLOSEST_COUNT;
+
+	if (avgDirection > currentFlock[i].direction) {
+		currentFlock[i].direction += (avgDirection - currentFlock[i].direction) * flockingFactor;
+	}
+	else if(avgDirection < currentFlock[i].direction) {
+		currentFlock[i].direction -= (currentFlock[i].direction - avgDirection) * flockingFactor;
+	}
+
+	for (int j = 0; j < CLOSEST_COUNT; j++) {
+		float dist = findDistance(i, N[j]);
+		if (dist < 0.05) {
+			float inverseDist = 1 / dist;
+			float deltaX = previousFlock[N[j]].x - previousFlock[i].x;
+			float deltaY = previousFlock[N[j]].y - previousFlock[i].y;
+			float desiredDir = atan2f(deltaY, deltaX) + PI;
+			desiredDir = fmod(desiredDir, 2 * PI);
+
+			if (currentFlock[i].direction <= desiredDir) {
+				currentFlock[i].direction += inverseDist * 0.005;
+			}
+			else {
+				currentFlock[i].direction -= inverseDist * 0.005;
+			}
+		}
+	}
+}
+
+void handleBoidWallInteraction(int i) {
+	if (currentFlock[i].x < 0.05) {
+		float inverseDist = 1 / currentFlock[i].x;
+
+		if (currentFlock[i].direction >= PI && currentFlock[i].direction <= 3 * PI / 2) {
+			currentFlock[i].direction += inverseDist * turnFactor;
+		}
+		else if (currentFlock[i].direction >= PI / 2 && currentFlock[i].direction <= PI) {
+			currentFlock[i].direction -= inverseDist * turnFactor;
+		}
+	}
+	if (currentFlock[i].x > 0.95) {
+		float inverseDist = 1 / (1 - currentFlock[i].x);
+
+		if (currentFlock[i].direction >= 0 && currentFlock[i].direction <= PI / 2) {
+			currentFlock[i].direction += inverseDist * turnFactor;
+		}
+		else if (currentFlock[i].direction >= 3 * PI / 2 && currentFlock[i].direction <= 2 * PI) {
+			currentFlock[i].direction -= inverseDist * turnFactor;
+		}
+
+	}
+
+	if (currentFlock[i].y < buttonAreaHeight + 0.05) {
+		float inverseDist = 1 / (currentFlock[i].y - buttonAreaHeight);
+
+		if (currentFlock[i].direction >= 3 * PI / 2 && currentFlock[i].direction <= 2 * PI) {
+			currentFlock[i].direction += inverseDist * turnFactor;
+		}
+		else if (currentFlock[i].direction >= PI && currentFlock[i].direction <= 3 * PI / 2) {
+			currentFlock[i].direction -= inverseDist * turnFactor;
+		}
+	}
+	if (currentFlock[i].y > 0.95) {
+		float inverseDist = 1 / (1 - currentFlock[i].y);
+
+		if (currentFlock[i].direction >= PI / 2 && currentFlock[i].direction <= PI) {
+			currentFlock[i].direction += inverseDist * turnFactor;
+		}
+		else if (currentFlock[i].direction >= 0 && currentFlock[i].direction <= PI / 2) {
+			currentFlock[i].direction -= inverseDist * turnFactor;
+		}
+
+	}
+}
 
 /************************************************************************
 
@@ -512,11 +568,11 @@ void findClosestN(int index, int closestNArray[]) {
 
 *************************************************************************/
 float findDistance(int index1, int index2) {
-	float x1 = currentFlock[index1].x;
-	float y1 = currentFlock[index1].y;
+	float x1 = previousFlock[index1].x;
+	float y1 = previousFlock[index1].y;
 
-	float x2 = currentFlock[index2].x;
-	float y2 = currentFlock[index2].y;
+	float x2 = previousFlock[index2].x;
+	float y2 = previousFlock[index2].y;
 
 	float dist = sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2));
 

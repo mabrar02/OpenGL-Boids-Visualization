@@ -1,4 +1,4 @@
-/* include the library header files */
+/* include the library header files and constants */
 #include <freeglut.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -10,7 +10,7 @@
 #define BOID_COUNT 40
 #define CLOSEST_COUNT 6
 
-
+/* defining function signatures */
 void printKeyboardControls(void);
 void drawButton(void);
 void drawBoids(void);
@@ -18,10 +18,11 @@ void initializeBoids(void);
 bool inClosestN(int);
 void findClosestN(int, int[]);
 float findDistance(int, int);
-int compareDistanceIndexPair(const void* a, const void* b);
+int compareDistanceIndexPair(const void* elem1, const void* elem2);
 void handleBoidWallInteraction(int);
 void handleFlockingInteraction(int);
 
+/* Struct for boid for easy management of position and direction */
 typedef struct {
 	GLfloat x;
 	GLfloat y;
@@ -29,6 +30,7 @@ typedef struct {
 	GLfloat speed;
 } Boid;
 
+/* Struct with a boid's direction along with their index in the boid array for qsort*/
 typedef struct {
 	float distance;
 	int index;
@@ -50,6 +52,8 @@ GLboolean paused = GL_FALSE;
 // control variables
 GLint highlightedBoid = 0;
 GLfloat boidSpeed = 0.0030;
+GLfloat maxBoidSpeed = 0.040;
+GLfloat minBoidSpeed = 0.0001;
 
 // boid variables
 Boid currentFlock[BOID_COUNT];
@@ -57,11 +61,12 @@ Boid previousFlock[BOID_COUNT];
 int closestN[] = { -1, -1, -1, -1, -1, -1 };
 float boidSideLength = 0.02;
 float boidAngle = PI / 16;
-float turnFactor = 0.01;
+
+// tweak parameters
 float initialTurnFactor = 0.005;
 float flockingFactor = 0.5;
 float minBoidDistApart = 0.02;
-float boidAvoidanceFactor = 0.1;
+float boidAvoidanceFactor = 0.000075;
 float a = 0.002;
 
 
@@ -99,8 +104,6 @@ void myDisplay()
 	// clear the screen 
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	//draw debug lines
-
 
 	//draw boids
 	drawBoids();
@@ -111,10 +114,9 @@ void myDisplay()
 	drawButton();
 
 
-
+	//use swap buffers instead of flush() b/c of double buffering
 	glutSwapBuffers();
 }
-
 
 
 /************************************************************************
@@ -258,6 +260,7 @@ void myKeyboard(unsigned char key, int x, int y) {
 		}
 	}
 
+	// now force OpenGL to redraw the change
 	glutPostRedisplay();
 }
 
@@ -276,18 +279,19 @@ void mySpecialKeyboard(int key, int x, int y) {
 	switch (key) {
 	case GLUT_KEY_PAGE_UP:
 		boidSpeed += 0.001;
-		if (boidSpeed >= 0.040) {
-			boidSpeed = 0.040;
+		if (boidSpeed >= maxBoidSpeed) {
+			boidSpeed = maxBoidSpeed;
 		}
 		break;
 	case GLUT_KEY_PAGE_DOWN:
 		boidSpeed -= 0.001;
-		if (boidSpeed <= 0.001) {
-			boidSpeed = 0.001;
+		if (boidSpeed <= minBoidSpeed) {
+			boidSpeed = minBoidSpeed;
 		}
 		break;
 	}
 
+	// now force OpenGL to redraw the change
 	glutPostRedisplay();
 }
 
@@ -301,7 +305,11 @@ void mySpecialKeyboard(int key, int x, int y) {
 
 *************************************************************************/
 void initializeBoids(void) {
+	
+	//Iterate through boid array to set the initial parameters for each boid
 	for (int i = 0; i < BOID_COUNT; i++) {
+		
+		//Getting a random float between 0.0 and 1.0, then pushing it in our boid boundaries
 		currentFlock[i].x = (GLfloat)rand() / RAND_MAX;
 		currentFlock[i].y = (GLfloat)rand() / RAND_MAX;
 		if (currentFlock[i].y < buttonAreaHeight + boundaryPercent) {
@@ -316,9 +324,14 @@ void initializeBoids(void) {
 		if (currentFlock[i].x >= 1.0 - boundaryPercent) {
 			currentFlock[i].x -= boundaryPercent;
 		}
-		currentFlock[i].direction = ((GLfloat)rand() / RAND_MAX) * 2 * PI;
+
+		//Setting a random direction for every boid in radians
+		currentFlock[i].direction = ((GLfloat)rand() / RAND_MAX) * 1.999 * PI;
+
+		//Setting initial speed in every boid
 		currentFlock[i].speed = boidSpeed;
 
+		//Copy all parameters for the ith boid in currentFlock into the ith boid in previousFlock
 		previousFlock[i].x = currentFlock[i].x;
 		previousFlock[i].y = currentFlock[i].y;
 		previousFlock[i].direction = currentFlock[i].direction;
@@ -337,9 +350,11 @@ void initializeBoids(void) {
 
 *************************************************************************/
 void drawBoids(void) {
-	// Draw the boid as a triangle based on its position and direction
+	// iterate through the array and draw the boid as a triangle based on its position and direction
 	for (int i = 0; i < BOID_COUNT; i++) {
 		glBegin(GL_TRIANGLES);
+
+		//Need to draw the boids as blue, green, or red, depending on if it is highlighted, in closest N, or unhighlighted
 		if (i == highlightedBoid - 1) {
 			glColor3f(1.0, 0.0, 0.0);
 		}
@@ -349,7 +364,18 @@ void drawBoids(void) {
 		else {
 			glColor3f(0.0, 0.0, 1.0);
 		}
+		/*
+			Every boid needs to be a triangle whose point at (x,y), which we call p1, is also the point in which our direction vector
+			dictates how the rest of our triangle is drawn. Because we also need to draw the points in clockwise, we make sure to draw
+			p2 before p3. 
 
+			Essentially, we are finding the angle/direction to p2 relative to p1, which we can do using a couple of known variables, 
+			currenFlock[i].direction and boidAngle, then we draw the point in that direction at the distance away that we've defined,
+			boid side length. We get the x component from the cos and the y component with the sign
+
+			I was extremely proud of myself for figuring out this math but I know I will forget which is why this explanation is
+			lengthy
+		*/
 		glVertex2f(currentFlock[i].x, currentFlock[i].y);
 		glVertex2f(currentFlock[i].x + (boidSideLength * cos(PI + currentFlock[i].direction + boidAngle)), currentFlock[i].y + (boidSideLength * sin(PI + currentFlock[i].direction + boidAngle)));
 		glVertex2f(currentFlock[i].x + (boidSideLength * cos(PI + currentFlock[i].direction - boidAngle)), currentFlock[i].y + (boidSideLength * sin(PI + currentFlock[i].direction - boidAngle)));
@@ -367,30 +393,26 @@ void drawBoids(void) {
 
 *************************************************************************/
 void myIdle(void) {
+
+	//Always find the closest N to our highlighted boid so it is updated in real time
 	if (highlightedBoid != 0) {
 		findClosestN(highlightedBoid - 1, closestN);
 	}
 
-
+	//If the scene is not paused, our nonevent animation can occur
 	if (!paused) {
-		turnFactor = initialTurnFactor + boidSpeed;
 		for (int i = 0; i < BOID_COUNT; i++) {
 
+			//Following pseudo code, if too close to the wall, the wall repeling takes precedence over flocking
 			if (currentFlock[i].x < 0.05 || currentFlock[i].x > 0.95 || currentFlock[i].y < buttonAreaHeight + 0.05 || currentFlock[i].y > 0.95) {
 				handleBoidWallInteraction(i);
 			}
 			else {
 				handleFlockingInteraction(i);
-				//if (currentFlock[i].direction - previousFlock[i].direction > a) {
-				//	currentFlock[i].direction = previousFlock[i].direction + a;
-				//}
-				//else if (currentFlock[i].direction - previousFlock[i].direction < -a) {
-				//	currentFlock[i].direction = previousFlock[i].direction - a;
-				//}
 			}
 
 
-			//printf("\ndirection: %.3f, x: %.2f, y: %.2f", currentFlock[i].direction, currentFlock[i].x, currentFlock[i].y);
+			//Move boids forward based on their direction and speed
 			currentFlock[i].speed = boidSpeed;
 			currentFlock[i].x += currentFlock[i].speed * cos(currentFlock[i].direction);
 			currentFlock[i].y += currentFlock[i].speed * sin(currentFlock[i].direction);
@@ -398,32 +420,54 @@ void myIdle(void) {
 
 		}
 
+		//After each step, copy currentFlock values into previousFlock
 		for (int i = 0; i < BOID_COUNT; i++) {
 			previousFlock[i] = currentFlock[i];
 		}
 	}
 
+	// now force OpenGL to redraw the change
 	glutPostRedisplay();
 }
 
+
+/************************************************************************
+
+	Function:		handleFlockingInteraction
+
+	Description:	function used to handle what happens when boids are not
+					near walls. Ensures boids move in a direction avg to 
+					their neighbours but also stay away from eachother
+
+*************************************************************************/
 void handleFlockingInteraction(int i) {
+
+
+	/* BOID FLOCKING SECTION */
+
+
+	//Find the indices of the N closest boids to this specific one
 	int N[CLOSEST_COUNT];
 	findClosestN(i, N);
 
+	//Variables to hold sum of each vector component
 	float sumX = cos(currentFlock[i].direction);  
 	float sumY = sin(currentFlock[i].direction); 
 
+	//Add each of the closest boids vector components to our sums to be averaged
 	for (int j = 0; j < CLOSEST_COUNT; j++) {
 		float direction = previousFlock[N[j]].direction;
 		sumX += cos(direction);
 		sumY += sin(direction);
 	}
 
+	//Find the average direction based off our summed components using arctan
 	float avgDirection = atan2(sumY, sumX);
 
-
+	//Find the different in direction
 	float deltaAngle = avgDirection - currentFlock[i].direction;
 
+	//Normalize directions to be within our [0,2PI) range
 	if (deltaAngle > PI) {
 		deltaAngle -= 2 * PI;
 	}
@@ -431,34 +475,63 @@ void handleFlockingInteraction(int i) {
 		deltaAngle += 2 * PI;
 	}
 
-	currentFlock[i].direction += 0.5 * deltaAngle;
+	//Adjust our current direction by a small amount to head towards the desired angle
+	currentFlock[i].direction += flockingFactor * deltaAngle;
 
+	//Normalize directions to be within our [0,2PI) range
 	currentFlock[i].direction = fmod(currentFlock[i].direction, 2 * PI);
 
-	//boid avoidance
+
+	/* BOID AVOIDANCE SECTION */
+
+	//Check if any of the closest N boids are TOO close to this specific boid
 	for (int j = 0; j < CLOSEST_COUNT; j++) {
 		float dist = findDistance(i, N[j]);
 		if (dist < 0.03) {
+
+			//Push close boids away inversely by distance and calculate where they want to push to
 			float inverseDist = 1 / dist;
 			float deltaX = previousFlock[N[j]].x - previousFlock[i].x;
 			float deltaY = previousFlock[N[j]].y - previousFlock[i].y;
 			float desiredDir = atan2f(deltaY, deltaX) + PI;
 			desiredDir = fmod(desiredDir, 2 * PI);
 
-			currentFlock[i].x += 0.000075 * inverseDist * cos(desiredDir);
-			currentFlock[i].y += 0.000075 * inverseDist * sin(desiredDir);
+			//Push boids away by the calculated amount times a small constant parameter
+			currentFlock[i].x += boidAvoidanceFactor * inverseDist * cos(desiredDir);
+			currentFlock[i].y += boidAvoidanceFactor * inverseDist * sin(desiredDir);
 		}
 	}
 }
 
+
+/************************************************************************
+
+	Function:		handleBoidWallInteraction
+
+	Description:	function used to ensure boids don't pass through walls
+					and are pushed away by the inverse distance
+
+*************************************************************************/
 void handleBoidWallInteraction(int i) {
+
+	//Normalize directions to be within our [0,2PI) range
 	float modFlock = fmod(currentFlock[i].direction, 2 * PI);
+
+	//Higher speeds require the wall boundaries to be stronger, so scale it as such
+	float turnFactor = initialTurnFactor + boidSpeed;
+
+	//Normalize directions to be within our [0,2PI) range
 	if (modFlock < 0) {
 		modFlock += 2 * PI;
 	}
+
+	//Each boundary will have slightly different interactions, series of if's to see which boundary we are hitting
 	if (currentFlock[i].x < 0.05) {
+
 		float inverseDist = 1 / currentFlock[i].x;
 
+		//If we hit the left wall coming down, we add to our direction to push away
+		//If we hit the left wall coming up, we subtract to our direction to push away
 		if (modFlock >= PI) {
 			currentFlock[i].direction += inverseDist * turnFactor;
 		}
@@ -469,6 +542,8 @@ void handleBoidWallInteraction(int i) {
 	if (currentFlock[i].x > 0.95) {
 		float inverseDist = 1 / (1 - currentFlock[i].x);
 
+		//If we hit the right wall coming up, we add to our direction to push away
+		//If we hit the right wall coming down, we subtract to our direction to push away
 		if (modFlock >= 0 && modFlock < PI) {
 			currentFlock[i].direction += inverseDist * turnFactor;
 		}
@@ -481,6 +556,8 @@ void handleBoidWallInteraction(int i) {
 	if (currentFlock[i].y < buttonAreaHeight + 0.05) {
 		float inverseDist = 1 / (currentFlock[i].y - buttonAreaHeight);
 
+		//If we hit the lower wall coming right, we add to our direction to push away
+		//If we hit the lower wall coming left, we subtract to our direction to push away
 		if ((modFlock >= 0 && modFlock < PI / 2) || (modFlock < 2 * PI && modFlock >= 3 * PI / 2)) {
 			currentFlock[i].direction += inverseDist * turnFactor;
 		}
@@ -491,6 +568,8 @@ void handleBoidWallInteraction(int i) {
 	if (currentFlock[i].y > 0.95) {
 		float inverseDist = 1 / (1 - currentFlock[i].y);
 
+		//If we hit the upper wall coming left, we add to our direction to push away
+		//If we hit the upper wall coming right, we subtract to our direction to push away
 		if (modFlock >= PI / 2 && modFlock < 3 * PI / 2) {
 			currentFlock[i].direction += inverseDist * turnFactor;
 		}
@@ -501,6 +580,7 @@ void handleBoidWallInteraction(int i) {
 	}
 }
 
+
 /************************************************************************
 
 	Function:		inClosestN
@@ -510,7 +590,8 @@ void handleBoidWallInteraction(int i) {
 
 *************************************************************************/
 bool inClosestN(int index) {
-	for (int i = 0; i < 6; i++) {
+	for (int i = 0; i < CLOSEST_COUNT; i++) {
+		//If a boid is in the global closest array, we know to highlight it
 		if (index == closestN[i]) return true;
 	}
 	return false;
@@ -528,14 +609,16 @@ bool inClosestN(int index) {
 	https://stackoverflow.com/questions/1787996/c-library-function-to-perform-sort
 
 *************************************************************************/
-int compareDistanceIndexPair(const void* a, const void* b) {
-	const DistanceIndexPair* pairA = (const DistanceIndexPair*)a;
-	const DistanceIndexPair* pairB = (const DistanceIndexPair*)b;
-
-	if (pairA->distance > pairB->distance) return 1;
-	if (pairA->distance < pairB->distance) return -1;
+int compareDistanceIndexPair(const void* elem1 , const void* elem2) {
+	const DistanceIndexPair* pair1 = (const DistanceIndexPair*)elem1;
+	const DistanceIndexPair* pair2 = (const DistanceIndexPair*)elem2;
+	
+	//Checking to see which distance in the distance index pair elements is shorter
+	if (pair1->distance > pair2->distance) return 1;
+	if (pair1->distance < pair2->distance) return -1;
 	return 0;
 }
+
 
 /************************************************************************
 
@@ -547,19 +630,25 @@ int compareDistanceIndexPair(const void* a, const void* b) {
 
 *************************************************************************/
 void findClosestN(int index, int closestNArray[]) {
+
+	//Initialize our distance index pairs
 	DistanceIndexPair distanceIndexPairs[BOID_COUNT];
 
 	for (int i = 0; i < BOID_COUNT; i++) {
+		
+		//If we have the current boid's index, ensure that it won't be highlighted as it's own neighbour
+		//This is done by setting it's distance to infinity
 		if (i != index) {
 			distanceIndexPairs[i].distance = findDistance(index, i);
 			distanceIndexPairs[i].index = i;
 		}
 		else {
 			distanceIndexPairs[i].distance = INFINITY;
-			distanceIndexPairs[i].index = -1;  // Mark as invalid index
+			distanceIndexPairs[i].index = -1; 
 		}
 	}
 
+	//Use qsort to sort our distance index pair array so we can retrieve the first N closest neighbours
 	qsort(distanceIndexPairs, BOID_COUNT, sizeof(DistanceIndexPair), compareDistanceIndexPair);
 
 	for (int i = 0; i < CLOSEST_COUNT; i++) {
@@ -577,6 +666,8 @@ void findClosestN(int index, int closestNArray[]) {
 
 *************************************************************************/
 float findDistance(int index1, int index2) {
+	
+	//basic distance calculation formula between two points, square root of the square of delta x and delta y
 	float x1 = previousFlock[index1].x;
 	float y1 = previousFlock[index1].y;
 
@@ -585,8 +676,10 @@ float findDistance(int index1, int index2) {
 
 	float dist = sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2));
 
+	//distance is based off of two indices instead of two points, allowing for easy boid retrieval in other functions
 	return dist;
 }
+
 
 /************************************************************************
 
@@ -663,6 +756,6 @@ void printKeyboardControls(void)
 	printf("0 \t\t: Turn off highlighting\n");
 	printf("q \t\t: Quit\n\n\n");
 
-	printf("Note: May need to use FN key to use Page Up and Page Down on Laptops.");
+	printf("Note: May need to use FN key to use Page Up and Page Down on Laptops.\n");
 }
 

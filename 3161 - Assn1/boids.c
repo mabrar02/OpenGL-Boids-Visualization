@@ -7,7 +7,7 @@
 #include <float.h>
 #define PI 3.1415926
 #define DEG_TO_RAD PI/180.0
-#define BOID_COUNT 7
+#define BOID_COUNT 40
 #define CLOSEST_COUNT 6
 
 
@@ -19,7 +19,6 @@ bool inClosestN(int);
 void findClosestN(int, int[]);
 float findDistance(int, int);
 int compareDistanceIndexPair(const void* a, const void* b);
-void drawDebug(void);
 void handleBoidWallInteraction(int);
 void handleFlockingInteraction(int);
 
@@ -43,6 +42,7 @@ GLfloat mouseX, mouseY;
 GLint windowHeight = 500;
 GLint windowWidth = 500;
 GLfloat buttonAreaHeight = 0.25;
+GLfloat boundaryPercent = 0.05;
 
 // button variables
 GLboolean paused = GL_FALSE;
@@ -58,10 +58,11 @@ int closestN[] = { -1, -1, -1, -1, -1, -1 };
 float boidSideLength = 0.03;
 float boidAngle = PI / 20;
 float turnFactor = 0.01;
-float initialTurnFactor = 0.007;
+float initialTurnFactor = 0.005;
 float flockingFactor = 0.5;
 float minBoidDistApart = 0.075;
 float boidAvoidanceFactor = 0.1;
+float a = 0.002;
 
 
 
@@ -99,7 +100,6 @@ void myDisplay()
 	glClear(GL_COLOR_BUFFER_BIT);
 
 	//draw debug lines
-	//drawDebug();
 
 
 	//draw boids
@@ -115,21 +115,7 @@ void myDisplay()
 	glutSwapBuffers();
 }
 
-void drawDebug(void) {
-	glBegin(GL_LINES);
-		glColor3f(1.0, 1.0, 1.0);
-		glVertex2f(0.05, 0);
-		glVertex2f(0.05, 1);
 
-		glVertex2f(0, 0.95);
-		glVertex2f(1, 0.95);
-
-		glVertex2f(0, 0.30);
-		glVertex2f(1, 0.30);
-
-		glVertex2f(0.95, 0);
-		glVertex2f(0.95, 1);
-}
 
 /************************************************************************
 
@@ -318,8 +304,17 @@ void initializeBoids(void) {
 	for (int i = 0; i < BOID_COUNT; i++) {
 		currentFlock[i].x = (GLfloat)rand() / RAND_MAX;
 		currentFlock[i].y = (GLfloat)rand() / RAND_MAX;
-		if (currentFlock[i].y < buttonAreaHeight) {
-			currentFlock[i].y += buttonAreaHeight;
+		if (currentFlock[i].y < buttonAreaHeight + boundaryPercent) {
+			currentFlock[i].y += buttonAreaHeight + boundaryPercent;
+		}
+		if (currentFlock[i].y >= 1.0 - boundaryPercent) {
+			currentFlock[i].y -= boundaryPercent;
+		}
+		if (currentFlock[i].x <= boundaryPercent) {
+			currentFlock[i].x += boundaryPercent;
+		}
+		if (currentFlock[i].x >= 1.0 - boundaryPercent) {
+			currentFlock[i].x -= boundaryPercent;
 		}
 		currentFlock[i].direction = ((GLfloat)rand() / RAND_MAX) * 2 * PI;
 		currentFlock[i].speed = boidSpeed;
@@ -381,17 +376,19 @@ void myIdle(void) {
 		turnFactor = initialTurnFactor + boidSpeed;
 		for (int i = 0; i < BOID_COUNT; i++) {
 
-			if (currentFlock[i].x < 0.02 || currentFlock[i].x > 0.98 || currentFlock[i].y < buttonAreaHeight + 0.02 || currentFlock[i].y > 0.98) {
+			if (currentFlock[i].x < 0.05 || currentFlock[i].x > 0.95 || currentFlock[i].y < buttonAreaHeight + 0.05 || currentFlock[i].y > 0.95) {
 				handleBoidWallInteraction(i);
 			}
 			else {
 				handleFlockingInteraction(i);
+				//if (currentFlock[i].direction - previousFlock[i].direction > a) {
+				//	currentFlock[i].direction = previousFlock[i].direction + a;
+				//}
+				//else if (currentFlock[i].direction - previousFlock[i].direction < -a) {
+				//	currentFlock[i].direction = previousFlock[i].direction - a;
+				//}
 			}
 
-			currentFlock[i].direction = fmod(currentFlock[i].direction, 2 * PI);
-			if (currentFlock[i].direction < 0) {
-				currentFlock[i].direction += 2 * PI;
-			}
 
 			//printf("\ndirection: %.3f, x: %.2f, y: %.2f", currentFlock[i].direction, currentFlock[i].x, currentFlock[i].y);
 			currentFlock[i].speed = boidSpeed;
@@ -411,58 +408,71 @@ void myIdle(void) {
 
 void handleFlockingInteraction(int i) {
 	int N[CLOSEST_COUNT];
-
 	findClosestN(i, N);
 
-	float avgDirection = 0;
+	float sumX = cos(currentFlock[i].direction);  
+	float sumY = sin(currentFlock[i].direction); 
 
-	//avg vector calculation
 	for (int j = 0; j < CLOSEST_COUNT; j++) {
-		avgDirection += previousFlock[N[j]].direction;
+		float direction = previousFlock[N[j]].direction;
+		sumX += cos(direction);
+		sumY += sin(direction);
 	}
-	avgDirection = avgDirection / CLOSEST_COUNT;
 
-	if (avgDirection > currentFlock[i].direction) {
-		currentFlock[i].direction += (avgDirection - currentFlock[i].direction) * 0.1;
+	float avgDirection = atan2(sumY, sumX);
+
+
+	float deltaAngle = avgDirection - currentFlock[i].direction;
+
+	if (deltaAngle > PI) {
+		deltaAngle -= 2 * PI;
 	}
-	else if(avgDirection < currentFlock[i].direction) {
-		currentFlock[i].direction -= (currentFlock[i].direction - avgDirection) * 0.1;
+	else if (deltaAngle < -PI) {
+		deltaAngle += 2 * PI;
 	}
+
+	currentFlock[i].direction += 0.5 * deltaAngle;
+
+	currentFlock[i].direction = fmod(currentFlock[i].direction, 2 * PI);
 
 	//boid avoidance
 	for (int j = 0; j < CLOSEST_COUNT; j++) {
 		float dist = findDistance(i, N[j]);
-		if (dist < 0.05) {
+		if (dist < 0.06) {
 			float inverseDist = 1 / dist;
 			float deltaX = previousFlock[N[j]].x - previousFlock[i].x;
 			float deltaY = previousFlock[N[j]].y - previousFlock[i].y;
 			float desiredDir = atan2f(deltaY, deltaX) + PI;
 			desiredDir = fmod(desiredDir, 2 * PI);
 
-			currentFlock[i].x += 0.00005 * inverseDist * cos(desiredDir);
-			currentFlock[i].y += 0.00005 * inverseDist * sin(desiredDir);
+			currentFlock[i].x += 0.000075 * inverseDist * cos(desiredDir);
+			currentFlock[i].y += 0.000075 * inverseDist * sin(desiredDir);
 		}
 	}
 }
 
 void handleBoidWallInteraction(int i) {
+	float modFlock = fmod(currentFlock[i].direction, 2 * PI);
+	if (modFlock < 0) {
+		modFlock += 2 * PI;
+	}
 	if (currentFlock[i].x < 0.05) {
 		float inverseDist = 1 / currentFlock[i].x;
 
-		if (currentFlock[i].direction >= PI && currentFlock[i].direction <= 3 * PI / 2) {
+		if (modFlock >= PI) {
 			currentFlock[i].direction += inverseDist * turnFactor;
 		}
-		else if (currentFlock[i].direction >= PI / 2 && currentFlock[i].direction <= PI) {
+		else if (modFlock < PI) {
 			currentFlock[i].direction -= inverseDist * turnFactor;
 		}
 	}
 	if (currentFlock[i].x > 0.95) {
 		float inverseDist = 1 / (1 - currentFlock[i].x);
 
-		if (currentFlock[i].direction >= 0 && currentFlock[i].direction <= PI / 2) {
+		if (modFlock >= 0 && modFlock < PI) {
 			currentFlock[i].direction += inverseDist * turnFactor;
 		}
-		else if (currentFlock[i].direction >= 3 * PI / 2 && currentFlock[i].direction <= 2 * PI) {
+		else if (modFlock >= PI / 2 && modFlock < 2 * PI) {
 			currentFlock[i].direction -= inverseDist * turnFactor;
 		}
 
@@ -471,20 +481,20 @@ void handleBoidWallInteraction(int i) {
 	if (currentFlock[i].y < buttonAreaHeight + 0.05) {
 		float inverseDist = 1 / (currentFlock[i].y - buttonAreaHeight);
 
-		if (currentFlock[i].direction >= 3 * PI / 2 && currentFlock[i].direction <= 2 * PI) {
+		if ((modFlock >= 0 && modFlock < PI / 2) || (modFlock < 2 * PI && modFlock >= 3 * PI / 2)) {
 			currentFlock[i].direction += inverseDist * turnFactor;
 		}
-		else if (currentFlock[i].direction >= PI && currentFlock[i].direction <= 3 * PI / 2) {
+		else if (modFlock >= PI / 2 && modFlock < 3 * PI / 2) {
 			currentFlock[i].direction -= inverseDist * turnFactor;
 		}
 	}
 	if (currentFlock[i].y > 0.95) {
 		float inverseDist = 1 / (1 - currentFlock[i].y);
 
-		if (currentFlock[i].direction >= PI / 2 && currentFlock[i].direction <= PI) {
+		if (modFlock >= PI / 2 && modFlock < 3 * PI / 2) {
 			currentFlock[i].direction += inverseDist * turnFactor;
 		}
-		else if (currentFlock[i].direction >= 0 && currentFlock[i].direction <= PI / 2) {
+		else if ((modFlock >= 0 && modFlock < PI / 2) || (modFlock < 2 * PI && modFlock >= 3 * PI / 2)) {
 			currentFlock[i].direction -= inverseDist * turnFactor;
 		}
 

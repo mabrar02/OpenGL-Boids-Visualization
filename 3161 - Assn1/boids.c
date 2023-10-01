@@ -7,7 +7,7 @@
 #include <float.h>
 #define PI 3.1415926
 #define DEG_TO_RAD PI/180.0
-#define BOID_COUNT 40
+#define BOID_COUNT 7
 #define CLOSEST_COUNT 6
 
 
@@ -60,7 +60,7 @@ float boidAngle = PI / 20;
 float turnFactor = 0.01;
 float initialTurnFactor = 0.007;
 float flockingFactor = 0.5;
-float minBoidDistApart = 0.1;
+float minBoidDistApart = 0.075;
 float boidAvoidanceFactor = 0.1;
 
 
@@ -381,7 +381,7 @@ void myIdle(void) {
 		turnFactor = initialTurnFactor + boidSpeed;
 		for (int i = 0; i < BOID_COUNT; i++) {
 
-			if (currentFlock[i].x < 0.05 || currentFlock[i].x > 0.95 || currentFlock[i].y < buttonAreaHeight + 0.05 || currentFlock[i].y > 0.95) {
+			if (currentFlock[i].x < 0.02 || currentFlock[i].x > 0.98 || currentFlock[i].y < buttonAreaHeight + 0.02 || currentFlock[i].y > 0.98) {
 				handleBoidWallInteraction(i);
 			}
 			else {
@@ -415,18 +415,21 @@ void handleFlockingInteraction(int i) {
 	findClosestN(i, N);
 
 	float avgDirection = 0;
+
+	//avg vector calculation
 	for (int j = 0; j < CLOSEST_COUNT; j++) {
 		avgDirection += previousFlock[N[j]].direction;
 	}
 	avgDirection = avgDirection / CLOSEST_COUNT;
 
 	if (avgDirection > currentFlock[i].direction) {
-		currentFlock[i].direction += (avgDirection - currentFlock[i].direction) * flockingFactor;
+		currentFlock[i].direction += (avgDirection - currentFlock[i].direction) * 0.1;
 	}
 	else if(avgDirection < currentFlock[i].direction) {
-		currentFlock[i].direction -= (currentFlock[i].direction - avgDirection) * flockingFactor;
+		currentFlock[i].direction -= (currentFlock[i].direction - avgDirection) * 0.1;
 	}
 
+	//boid avoidance
 	for (int j = 0; j < CLOSEST_COUNT; j++) {
 		float dist = findDistance(i, N[j]);
 		if (dist < 0.05) {
@@ -436,12 +439,8 @@ void handleFlockingInteraction(int i) {
 			float desiredDir = atan2f(deltaY, deltaX) + PI;
 			desiredDir = fmod(desiredDir, 2 * PI);
 
-			if (currentFlock[i].direction <= desiredDir) {
-				currentFlock[i].direction += inverseDist * 0.005;
-			}
-			else {
-				currentFlock[i].direction -= inverseDist * 0.005;
-			}
+			currentFlock[i].x += 0.00005 * inverseDist * cos(desiredDir);
+			currentFlock[i].y += 0.00005 * inverseDist * sin(desiredDir);
 		}
 	}
 }

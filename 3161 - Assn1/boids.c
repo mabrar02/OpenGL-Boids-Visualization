@@ -55,12 +55,12 @@ GLfloat boidSpeed = 0.0030;
 Boid currentFlock[BOID_COUNT];
 Boid previousFlock[BOID_COUNT];
 int closestN[] = { -1, -1, -1, -1, -1, -1 };
-float boidSideLength = 0.03;
-float boidAngle = PI / 20;
+float boidSideLength = 0.02;
+float boidAngle = PI / 16;
 float turnFactor = 0.01;
 float initialTurnFactor = 0.005;
 float flockingFactor = 0.5;
-float minBoidDistApart = 0.075;
+float minBoidDistApart = 0.02;
 float boidAvoidanceFactor = 0.1;
 float a = 0.002;
 
@@ -438,7 +438,7 @@ void handleFlockingInteraction(int i) {
 	//boid avoidance
 	for (int j = 0; j < CLOSEST_COUNT; j++) {
 		float dist = findDistance(i, N[j]);
-		if (dist < 0.06) {
+		if (dist < 0.03) {
 			float inverseDist = 1 / dist;
 			float deltaX = previousFlock[N[j]].x - previousFlock[i].x;
 			float deltaY = previousFlock[N[j]].y - previousFlock[i].y;

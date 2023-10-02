@@ -261,6 +261,47 @@ void myKeyboard(unsigned char key, int x, int y) {
 		}
 	}
 
+	/* DELETE THIS AFTER */
+	else if (key == 'f') {
+		flockingFactor += 0.01;
+	}
+	else if (key == 'v') {
+		flockingFactor -= 0.01;
+	}
+	else if (key == 'g') {
+		minBoidDistApart += 0.001;
+	}
+	else if (key == 'b') {
+		minBoidDistApart -= 0.001;
+	}
+	else if (key == 'd') {
+		boidAvoidanceFactor += 0.000001;
+	}
+	else if (key == 'c') {
+		boidAvoidanceFactor -= 0.000001;
+	}
+	else if (key == 's') {
+		a += 0.01;
+	}
+	else if (key == 'x') {
+		a -= 0.01;
+	}
+	else if (key == 'j') {
+		initialTurnFactor += 0.001;
+	}
+	else if (key == 'm') {
+		initialTurnFactor -= 0.001;
+	}
+	else if (key == 't') {
+		boundaryPercent += 0.001;
+	}
+	else if (key == 'y') {
+		boundaryPercent -= 0.001;
+	}
+
+	printf("\n FlockFac: %f, minBoidDist: %f, boidAvoid: %f, a: %f, turnFac: %f, boundaryPercent: %f", flockingFactor, minBoidDistApart, boidAvoidanceFactor, a, initialTurnFactor, boundaryPercent);
+
+
 	// now force OpenGL to redraw the change
 	glutPostRedisplay();
 }

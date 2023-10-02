@@ -1,4 +1,4 @@
-/* include the library header files and constants */
+/* Include the library header files and constants */
 #include <freeglut.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -10,7 +10,7 @@
 #define BOID_COUNT 40
 #define CLOSEST_COUNT 6
 
-/* defining function signatures */
+/* Defining function signatures */
 void printKeyboardControls(void);
 void drawButton(void);
 void drawBoids(void);
@@ -36,7 +36,7 @@ typedef struct {
 	int index;
 } DistanceIndexPair;
 
-// global mouse variables
+// Global mouse variables
 GLint   mousePressed = 0;
 GLfloat mouseX, mouseY;
 
@@ -46,23 +46,23 @@ GLint windowWidth = 500;
 GLfloat buttonAreaHeight = 0.25;
 GLfloat boundaryPercent = 0.05;
 
-// button variables
+// Button variables
 GLboolean paused = GL_FALSE;
 
-// control variables
+// Control variables
 GLint highlightedBoid = 0;
 GLfloat boidSpeed = 0.0030;
 GLfloat maxBoidSpeed = 0.040;
 GLfloat minBoidSpeed = 0.0001;
 
-// boid variables
+// Boid variables
 Boid currentFlock[BOID_COUNT];
 Boid previousFlock[BOID_COUNT];
 int closestN[] = { -1, -1, -1, -1, -1, -1 };
 float boidSideLength = 0.02;
 float boidAngle = PI / 16;
 
-// tweak parameters
+// Tweak parameters
 float initialTurnFactor = 0.005;
 float flockingFactor = 0.5;
 float minBoidDistApart = 0.02;

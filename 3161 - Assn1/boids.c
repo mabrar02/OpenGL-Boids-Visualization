@@ -44,30 +44,31 @@ GLfloat mouseX, mouseY;
 GLint windowHeight = 500;
 GLint windowWidth = 500;
 GLfloat buttonAreaHeight = 0.25;
-GLfloat boundaryPercent = 0.05;
+GLfloat boundaryPercent = 0.03;
 
 // Button variables
 GLboolean paused = GL_FALSE;
 
 // Control variables
 GLint highlightedBoid = 0;
-GLfloat boidSpeed = 0.0030;
-GLfloat maxBoidSpeed = 0.040;
+GLfloat boidSpeed = 0.0006;
+GLfloat maxBoidSpeed = 0.020;
 GLfloat minBoidSpeed = 0.0001;
+GLfloat boidSpeedIncrement = 0.0001;
 
 // Boid variables
 Boid currentFlock[BOID_COUNT];
 Boid previousFlock[BOID_COUNT];
 int closestN[] = { -1, -1, -1, -1, -1, -1 };
 float boidSideLength = 0.02;
-float boidAngle = PI / 16;
+float boidAngle = PI / 13;
 
 // Tweak parameters
-float initialTurnFactor = 0.005;
-float flockingFactor = 0.5;
+float initialTurnFactor = 0.001;
+float flockingFactor = 0.15;
 float minBoidDistApart = 0.02;
 float boidAvoidanceFactor = 0.000075;
-float a = 0.002;
+float a = 0.5;
 
 
 
@@ -278,13 +279,13 @@ void mySpecialKeyboard(int key, int x, int y) {
 	//Increasing or decreasing speed based on page up or page down press respectively
 	switch (key) {
 	case GLUT_KEY_PAGE_UP:
-		boidSpeed += 0.001;
+		boidSpeed += boidSpeedIncrement;
 		if (boidSpeed >= maxBoidSpeed) {
 			boidSpeed = maxBoidSpeed;
 		}
 		break;
 	case GLUT_KEY_PAGE_DOWN:
-		boidSpeed -= 0.001;
+		boidSpeed -= boidSpeedIncrement;
 		if (boidSpeed <= minBoidSpeed) {
 			boidSpeed = minBoidSpeed;
 		}
@@ -404,11 +405,17 @@ void myIdle(void) {
 		for (int i = 0; i < BOID_COUNT; i++) {
 
 			//Following pseudo code, if too close to the wall, the wall repeling takes precedence over flocking
-			if (currentFlock[i].x < 0.05 || currentFlock[i].x > 0.95 || currentFlock[i].y < buttonAreaHeight + 0.05 || currentFlock[i].y > 0.95) {
+			if (currentFlock[i].x < boundaryPercent || currentFlock[i].x > 1.0 - boundaryPercent || currentFlock[i].y < buttonAreaHeight + boundaryPercent || currentFlock[i].y > 1.0 - boundaryPercent) {
 				handleBoidWallInteraction(i);
 			}
 			else {
 				handleFlockingInteraction(i);
+				//if (currentFlock[i].direction - previousFlock[i].direction >= a) {
+				//	currentFlock[i].direction = previousFlock[i].direction + a;
+				//}
+				//else if (currentFlock[i].direction - previousFlock[i].direction <= -a) {
+				//	currentFlock[i].direction = previousFlock[i].direction - a;
+				//}
 			}
 
 

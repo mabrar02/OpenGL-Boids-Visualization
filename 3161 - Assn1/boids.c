@@ -52,7 +52,7 @@ GLboolean paused = GL_FALSE;
 // Control variables
 GLint highlightedBoid = 0;
 GLfloat boidSpeed = 0.0006;
-GLfloat maxBoidSpeed = 0.020;
+GLfloat maxBoidSpeed = 0.0040;
 GLfloat minBoidSpeed = 0.0001;
 GLfloat boidSpeedIncrement = 0.0001;
 
@@ -66,7 +66,7 @@ float boidAngle = PI / 13;
 // Tweak parameters
 float initialTurnFactor = 0.001;
 float flockingFactor = 0.15;
-float minBoidDistApart = 0.02;
+float minBoidDistApart = 0.03;
 float boidAvoidanceFactor = 0.000075;
 float a = 0.5;
 
@@ -494,7 +494,7 @@ void handleFlockingInteraction(int i) {
 	//Check if any of the closest N boids are TOO close to this specific boid
 	for (int j = 0; j < CLOSEST_COUNT; j++) {
 		float dist = findDistance(i, N[j]);
-		if (dist < 0.03) {
+		if (dist < minBoidDistApart) {
 
 			//Push close boids away inversely by distance and calculate where they want to push to
 			float inverseDist = 1 / dist;

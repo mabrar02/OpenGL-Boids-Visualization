@@ -51,7 +51,7 @@ GLboolean paused = GL_FALSE;
 
 // Control variables
 GLint highlightedBoid = 0;
-GLfloat boidSpeed = 0.0006;
+GLfloat boidSpeed = 0.0003;
 GLfloat maxBoidSpeed = 0.0040;
 GLfloat minBoidSpeed = 0.0001;
 GLfloat boidSpeedIncrement = 0.0001;
@@ -68,7 +68,7 @@ float initialTurnFactor = 0.001;
 float flockingFactor = 0.15;
 float minBoidDistApart = 0.03;
 float boidAvoidanceFactor = 0.000075;
-float a = 0.5;
+float a = 1.0;
 
 
 
@@ -263,10 +263,10 @@ void myKeyboard(unsigned char key, int x, int y) {
 
 	/* DELETE THIS AFTER */
 	else if (key == 'f') {
-		flockingFactor += 0.01;
+		flockingFactor += 0.001;
 	}
 	else if (key == 'v') {
-		flockingFactor -= 0.01;
+		flockingFactor -= 0.001;
 	}
 	else if (key == 'g') {
 		minBoidDistApart += 0.001;
@@ -287,16 +287,24 @@ void myKeyboard(unsigned char key, int x, int y) {
 		a -= 0.01;
 	}
 	else if (key == 'j') {
-		initialTurnFactor += 0.001;
+		initialTurnFactor += 0.0001;
 	}
 	else if (key == 'm') {
-		initialTurnFactor -= 0.001;
+		initialTurnFactor -= 0.0001;
 	}
 	else if (key == 't') {
 		boundaryPercent += 0.001;
 	}
 	else if (key == 'y') {
 		boundaryPercent -= 0.001;
+	}
+	else if (key == 'r') {
+		initialTurnFactor = 0.001;
+		flockingFactor = 0.15;
+		minBoidDistApart = 0.03;
+		boidAvoidanceFactor = 0.000075;
+		a = 1.0;
+		boundaryPercent = 0.03;
 	}
 
 	printf("\n FlockFac: %f, minBoidDist: %f, boidAvoid: %f, a: %f, turnFac: %f, boundaryPercent: %f", flockingFactor, minBoidDistApart, boidAvoidanceFactor, a, initialTurnFactor, boundaryPercent);

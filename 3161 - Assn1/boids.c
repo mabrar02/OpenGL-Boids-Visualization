@@ -65,10 +65,9 @@ float boidAngle = PI / 13;
 
 // Tweak parameters
 float initialTurnFactor = 0.001;
-float flockingFactor = 0.15;
+float flockingFactor = 0.1;
 float minBoidDistApart = 0.03;
-float boidAvoidanceFactor = 0.000075;
-float a = 1.0;
+float boidAvoidanceFactor = 0.000010;
 
 
 
@@ -261,55 +260,6 @@ void myKeyboard(unsigned char key, int x, int y) {
 		}
 	}
 
-	/* DELETE THIS AFTER */
-	else if (key == 'f') {
-		flockingFactor += 0.001;
-	}
-	else if (key == 'v') {
-		flockingFactor -= 0.001;
-	}
-	else if (key == 'g') {
-		minBoidDistApart += 0.001;
-	}
-	else if (key == 'b') {
-		minBoidDistApart -= 0.001;
-	}
-	else if (key == 'd') {
-		boidAvoidanceFactor += 0.000001;
-	}
-	else if (key == 'c') {
-		boidAvoidanceFactor -= 0.000001;
-	}
-	else if (key == 's') {
-		a += 0.01;
-	}
-	else if (key == 'x') {
-		a -= 0.01;
-	}
-	else if (key == 'j') {
-		initialTurnFactor += 0.0001;
-	}
-	else if (key == 'm') {
-		initialTurnFactor -= 0.0001;
-	}
-	else if (key == 't') {
-		boundaryPercent += 0.001;
-	}
-	else if (key == 'y') {
-		boundaryPercent -= 0.001;
-	}
-	else if (key == 'r') {
-		initialTurnFactor = 0.001;
-		flockingFactor = 0.15;
-		minBoidDistApart = 0.03;
-		boidAvoidanceFactor = 0.000075;
-		a = 1.0;
-		boundaryPercent = 0.03;
-	}
-
-	printf("\n FlockFac: %f, minBoidDist: %f, boidAvoid: %f, a: %f, turnFac: %f, boundaryPercent: %f", flockingFactor, minBoidDistApart, boidAvoidanceFactor, a, initialTurnFactor, boundaryPercent);
-
-
 	// now force OpenGL to redraw the change
 	glutPostRedisplay();
 }
@@ -340,6 +290,9 @@ void mySpecialKeyboard(int key, int x, int y) {
 		}
 		break;
 	}
+	
+	//print speed for ease of access
+	printf("\nSpeed: %f", boidSpeed);
 
 	// now force OpenGL to redraw the change
 	glutPostRedisplay();
@@ -459,12 +412,20 @@ void myIdle(void) {
 			}
 			else {
 				handleFlockingInteraction(i);
-				//if (currentFlock[i].direction - previousFlock[i].direction >= a) {
-				//	currentFlock[i].direction = previousFlock[i].direction + a;
-				//}
-				//else if (currentFlock[i].direction - previousFlock[i].direction <= -a) {
-				//	currentFlock[i].direction = previousFlock[i].direction - a;
-				//}
+			}
+
+			//Handle edge cases where boids will glitch out of the screenview
+			if (currentFlock[i].x < 0) {
+				currentFlock[i].x = boundaryPercent;
+			}
+			else if (currentFlock[i].x > 1.0) {
+				currentFlock[i].x = 1.0 - boundaryPercent;
+			}
+			if (currentFlock[i].y < buttonAreaHeight) {
+				currentFlock[i].y = buttonAreaHeight + boundaryPercent;
+			}
+			else if (currentFlock[i].y > 1.0) {
+				currentFlock[i].y = 1.0 - boundaryPercent;
 			}
 
 
